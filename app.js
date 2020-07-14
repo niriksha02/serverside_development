@@ -3,6 +3,9 @@ const express = require('express');
 const path = require('path');
 const cookieParser = require('cookie-parser');
 const logger = require('morgan');
+const session = require('express-session');
+const FileStore = require('session-file-store')(session);
+
 const indexRouter = require('./routes/index');
 const usersRouter = require('./routes/users');
 const dishRouter = require('./routes/dishRouter');
@@ -23,59 +26,56 @@ app.use(logger('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-app.use(cookieParser('my-secret-key'));
+//app.use(cookieParser('my-secret-key'));
+app.use(session({
+  name: 'session-id',
+  secret: 'my-secret-key',
+  saveUninitialized: false,
+  resave: false,
+  store: new FileStore()
+}));
 
 function auth(req, res, next) {
+  
+  console.log(req.session);
 
-  console.log(req.signedCookies);
-
-  if (!req.signedCookies.user) {
+  
+  if (!req.session.user) {
     const authHeader = req.headers.authorization;
 
     if (!authHeader) {
       const err = new Error('You are not authenticated!');
-
       res.setHeader('WWW-Authenticate', 'Basic');
       err.status = 401;
       return next(err);
     }
-
     const auth = new Buffer.from(authHeader.split(' ')[1], 'base64').toString().split(':');
-
     const username = auth[0];
     const password = auth[1];
 
     if (username === 'admin' && password === 'password') {
-      res.cookie(
-        'user',
-        'admin',
-        {
-          signed: true,
-        }
-      );
+     
+      req.session.user = 'admin';
       next();
     } else {
       const err = new Error('Username/Password not known!');
-
       res.setHeader('WWW-Authenticate', 'Basic');
       err.status = 401;
       return next(err);
     }
   } else {
-    
-    if (req.signedCookies.user === 'admin') {
+   
+    if (req.session.user === 'admin') {
       next();
     } else {
       // invalid cookie
       const err = new Error('Malformed cookie - you are not authenticated!');
-
       res.setHeader('WWW-Authenticate', 'Basic');
       err.status = 401;
       return next(err);
     }
   }
 }
-
 // authentication before we allow access to any data/routes
 app.use(auth);
 app.use(express.static(path.join(__dirname, 'public')));
