@@ -21,6 +21,7 @@ dishRouter.route('/')
 )
 .post(
   authenticate.verifyUser,
+  authenticate.verifyAdmin,
   (req, res, next) => {
     Dishes.create(req.body)
     .then((dish) => {
@@ -34,6 +35,7 @@ dishRouter.route('/')
 )
 .put(
   authenticate.verifyUser,
+  authenticate.verifyAdmin,
   (_req, res, _next) => {
     res.statusCode = 403;
     res.end('PUT operation not supported on /dishes');
@@ -41,6 +43,7 @@ dishRouter.route('/')
 )
 .delete(
   authenticate.verifyUser,
+  authenticate.verifyAdmin,
   (_req, res, next) => {
     Dishes.remove({})
     .then((resp) => {
@@ -67,12 +70,15 @@ dishRouter.route('/:dishId')
 )
 .post(
   (req, res, _next) => {
+    authenticate.verifyUser,
+    authenticate.verifyAdmin,  
     res.statusCode = 403;
     res.end(`POST operation not supported on /dishes/${req.params.dishId}`);
   }
 )
 .put(
-  authenticate.verifyUser,
+    authenticate.verifyUser,
+    authenticate.verifyAdmin,  
   (req, res, next) => {
     Dishes.findByIdAndUpdate(req.params.dishId, {
       $set: req.body
@@ -87,7 +93,8 @@ dishRouter.route('/:dishId')
   }
 )
 .delete(
-  authenticate.verifyUser,
+    authenticate.verifyUser,
+    authenticate.verifyAdmin,  
   (req, res, next) => {
     Dishes.findByIdAndRemove(req.params.dishId)
     .then((resp) => {
@@ -98,7 +105,7 @@ dishRouter.route('/:dishId')
     .catch((err) => next(err));
   }
 );
-// Comments
+
 dishRouter.route('/:dishId/comments')
 .get(
   (req, res, next) => {
@@ -223,7 +230,11 @@ dishRouter.route('/:dishId/comments/:commentId')
     Dishes.findById(req.params.dishId)
     .then((dish) => {
       if (dish != null && dish.comments.id(req.params.commentId) != null) {
-        // Only allow user to change rating or comment
+        if (!dish.comments.id(req.params.commentId).author._id.equals(req.user._id)) {
+            err = new Error('You are not authorized to modify this comment!');
+            err.status = 403;
+            return next(err);  
+          }
         if (req.body.rating) {
           dish.comments.id(req.params.commentId).rating = req.body.rating;
         }
@@ -257,6 +268,11 @@ dishRouter.route('/:dishId/comments/:commentId')
     Dishes.findById(req.params.dishId)
     .then((dish) => {
       if (dish != null && dish.comments.id(req.params.commentId) != null) {
+        if (!dish.comments.id(req.params.commentId).author._id.equals(req.user._id)) {
+            err = new Error('You are not authorized to delete this comment!');
+            err.status = 403;
+            return next(err);  
+          }
         dish.comments.id(req.params.commentId).remove();
         dish.save()
         .then((dish) => {
